@@ -85,7 +85,8 @@ export const generateAgentLog = async (role: string, context: string): Promise<s
       contents: `You are a ${role}. The current context is "${context}". Generate a single short log line (max 15 words) looking like a system terminal output. Do not include timestamps.`,
       config: {
         maxOutputTokens: 50,
-        temperature: 0.7
+        temperature: 0.7,
+        thinkingConfig: { thinkingBudget: 0 }
       }
     });
     return response.text?.trim() || `[${role}] System active.`;

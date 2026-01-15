@@ -13,6 +13,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ agents, objective, packets 
   const [mode, setMode] = useState<'TOPO' | 'RAW'>('TOPO');
   const svgRef = useRef<SVGSVGElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   
   // Use refs for dynamic data access within the animation loop
   const packetsRef = useRef(packets);
@@ -27,24 +28,48 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ agents, objective, packets 
 
   // --- MODE A: MATRIX RAIN (RAW) ---
   useEffect(() => {
-    if (mode !== 'RAW' || !canvasRef.current) return;
+    if (mode !== 'RAW' || !canvasRef.current || !containerRef.current) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
+    const container = containerRef.current;
+
     if (!ctx) return;
 
-    // Resize
-    canvas.width = canvas.parentElement?.clientWidth || 300;
-    canvas.height = canvas.parentElement?.clientHeight || 300;
-
     const fontSize = 14;
-    const columns = Math.ceil(canvas.width / fontSize);
-    const drops: number[] = new Array(columns).fill(1);
-    
-    // Initialize drops
-    for (let i = 0; i < columns; i++) {
-        drops[i] = Math.floor(Math.random() * -100);
-    }
+    let drops: number[] = [];
+    let intervalId: any;
+
+    const handleResize = () => {
+        const { clientWidth, clientHeight } = container;
+        if (clientWidth === 0 || clientHeight === 0) return;
+        
+        // Reset canvas dimensions to match container
+        canvas.width = clientWidth;
+        canvas.height = clientHeight;
+
+        // Recalculate columns based on new width
+        const columns = Math.ceil(canvas.width / fontSize);
+        
+        // Initialize drops if empty, or resize array
+        if (drops.length === 0) {
+            drops = new Array(columns).fill(1).map(() => Math.floor(Math.random() * -100));
+        } else if (columns > drops.length) {
+            // Add new drops for wider screen
+            const newDrops = new Array(columns - drops.length).fill(1).map(() => Math.floor(Math.random() * -100));
+            drops = [...drops, ...newDrops];
+        } else if (columns < drops.length) {
+            // Trim drops for narrower screen
+            drops = drops.slice(0, columns);
+        }
+    };
+
+    // Initial resize
+    handleResize();
+
+    // Resize Observer for dynamic layout changes
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(container);
 
     const draw = () => {
       // Semi-transparent black for trail effect
@@ -54,14 +79,12 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ agents, objective, packets 
       ctx.fillStyle = '#0F0'; // Matrix Green
       ctx.font = `${fontSize}px monospace`;
       
-      // Determine System State
       const currentAgents = agentsRef.current;
       const isSystemActive = currentAgents.some(a => a.status === OpCode.INITIALIZE || a.status === OpCode.EXECUTING);
       
       let binaryPool = "";
       
       if (isSystemActive) {
-          // ACTIVE STATE: Construct binary pool ONLY from real-time packets
           const currentPackets = packetsRef.current;
           if (currentPackets.length > 0) {
               const slice = currentPackets.slice(-15).reverse();
@@ -76,20 +99,15 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ agents, objective, packets 
               });
           }
       } else {
-          // IDLE STATE: "Start it back" - Minimal idle stream
           binaryPool = "0"; 
       }
 
-      // Fallback to prevent crash if pool is empty
       if (binaryPool.length === 0) binaryPool = "10";
 
       for (let i = 0; i < drops.length; i++) {
         const charIndex = (i * 13 + Math.abs(Math.floor(drops[i]))) % binaryPool.length;
         const text = binaryPool[charIndex];
         
-        // Visual Tuning based on State
-        // Active: More frequent highlights, Standard density
-        // Idle: Rare highlights, Very low density (reduced frequency)
         const highlightChance = isSystemActive ? 0.95 : 0.9995;
         const respawnThreshold = isSystemActive ? 0.975 : 0.9995;
 
@@ -107,17 +125,21 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ agents, objective, packets 
       }
     };
 
-    const interval = setInterval(draw, 33);
-    return () => clearInterval(interval);
+    intervalId = setInterval(draw, 33);
 
+    return () => {
+        clearInterval(intervalId);
+        resizeObserver.disconnect();
+    };
   }, [mode]); 
 
   // --- MODE B: D3 TOPOLOGY (TOPO) ---
   useEffect(() => {
-    if (mode !== 'TOPO' || !svgRef.current || agents.length === 0) return;
+    if (mode !== 'TOPO' || !svgRef.current || !containerRef.current || agents.length === 0) return;
 
-    const width = svgRef.current.parentElement?.clientWidth || 300;
-    const height = svgRef.current.parentElement?.clientHeight || 300;
+    const container = containerRef.current;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
 
     d3.select(svgRef.current).selectAll("*").remove();
 
@@ -210,26 +232,28 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ agents, objective, packets 
   }, [agents, objective, mode]);
 
   return (
-    <div className="w-full h-full bg-[#0a0a0a] relative overflow-hidden rounded-md border border-gray-800 flex flex-col">
-        {/* Header / Toggle */}
-        <div className="absolute top-0 left-0 right-0 z-20 flex justify-between items-center p-2 bg-black/40 backdrop-blur-sm pointer-events-none">
-            <span className="text-[10px] text-gray-500 font-bold tracking-widest pl-2">
-                VISUALIZATION SUBSYSTEM
-            </span>
-            <div className="flex bg-[#111] rounded-sm p-0.5 pointer-events-auto">
+    <div ref={containerRef} className="w-full h-full bg-[#0a0a0a] relative overflow-hidden rounded-md border border-gray-800 flex flex-col group">
+        {/* Floating Toggle Controls - Discreet */}
+        <div className="absolute top-3 right-3 z-20 pointer-events-auto">
+            <div className="flex bg-black/80 backdrop-blur-md rounded-lg p-0.5 border border-gray-800/50 shadow-sm opacity-60 hover:opacity-100 transition-opacity duration-200">
                 <button 
                     onClick={() => setMode('TOPO')}
-                    className={`p-1 px-2 rounded-sm text-[10px] font-bold flex items-center gap-1 transition-colors ${mode === 'TOPO' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
+                    className={`p-1.5 px-2.5 rounded-md text-[10px] font-bold flex items-center gap-1.5 transition-all ${mode === 'TOPO' ? 'bg-gray-800 text-gray-200 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
                 >
-                   <Network size={10} /> TOPO
+                   <Network size={12} /> <span className="hidden sm:inline">TOPO</span>
                 </button>
                 <button 
                     onClick={() => setMode('RAW')}
-                    className={`p-1 px-2 rounded-sm text-[10px] font-bold flex items-center gap-1 transition-colors ${mode === 'RAW' ? 'bg-green-900/30 text-green-400 shadow-sm border border-green-900/50' : 'text-gray-500 hover:text-gray-300'}`}
+                    className={`p-1.5 px-2.5 rounded-md text-[10px] font-bold flex items-center gap-1.5 transition-all ${mode === 'RAW' ? 'bg-green-900/20 text-green-400 border border-green-900/30 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
                 >
-                   <Code2 size={10} /> RAW
+                   <Code2 size={12} /> <span className="hidden sm:inline">RAW</span>
                 </button>
             </div>
+        </div>
+        
+        {/* Watermark Label */}
+        <div className="absolute top-3 left-3 z-10 pointer-events-none opacity-30 text-[10px] font-mono tracking-widest text-gray-600 select-none">
+            VISUALIZATION_SUBSYSTEM
         </div>
 
       <div className="flex-1 relative w-full h-full">

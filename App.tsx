@@ -75,9 +75,7 @@ const App: React.FC = () => {
     setIsProvisioning(true);
     setAgents([]);
     setPackets([]);
-    // Switch to visual tab on mobile to see the bootstrap start
-    setMobileTab('VISUAL');
-
+    
     // 1. Root Architect Init Packet
     pushPacket(0, OpCode.INITIALIZE, "BOOTSTRAP_SEQUENCE_INIT");
     // Simulate initializing Global State Registry state.json
@@ -104,9 +102,6 @@ const App: React.FC = () => {
         pushPacket(agent.pid, OpCode.INITIALIZE, `SPAWN_ROLE_${agent.role.replace(/\s/g, '_').toUpperCase()}`);
       }
       
-      // Auto-switch to agents view on mobile once populated
-      setMobileTab('AGENTS');
-
     } catch (e) {
       pushPacket(0, OpCode.ERROR, "ARCHITECT_FAILURE");
     } finally {
@@ -213,60 +208,102 @@ const App: React.FC = () => {
   }, [isRunning, agents]);
 
   // Helper Component for Resource Stats
-  const ResourcePanel = () => (
-    <div className="space-y-2 text-[10px] font-mono text-gray-500">
-        <div className="flex justify-between">
-            <span>ROOT_ARCHITECT</span>
-            <span className="text-blue-400">{MODEL_TIERS.PRO}</span>
-        </div>
-        <div className="w-full bg-gray-800 h-1 rounded overflow-hidden">
-            <div className="bg-blue-600 h-full" style={{ width: isRunning ? '65%' : '5%' }}></div>
-        </div>
-        
-        <div className="flex justify-between mt-2">
-            <span>SUB_AGENTS_POOL</span>
-            <span className="text-yellow-400">{MODEL_TIERS.FLASH}</span>
-        </div>
-            <div className="w-full bg-gray-800 h-1 rounded overflow-hidden">
-            <div className="bg-yellow-600 h-full" style={{ width: `${(agents.length / 12) * 100}%` }}></div>
-        </div>
+  const ResourcePanel = ({ compact = false }: { compact?: boolean }) => {
+    if (compact) {
+        return (
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[10px] font-mono text-gray-400">
+                {/* Col 1: Root */}
+                <div className="flex flex-col justify-center gap-1">
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-500">ROOT</span>
+                        <span className="text-blue-400 bg-blue-900/10 px-1 rounded-sm text-[9px]">{MODEL_TIERS.PRO.split('-')[2].toUpperCase()}</span> 
+                    </div>
+                    <div className="w-full bg-gray-800 h-1 rounded overflow-hidden">
+                        <div className="bg-blue-600 h-full transition-all duration-300" style={{ width: isRunning ? '65%' : '5%' }}></div>
+                    </div>
+                </div>
 
-        <div className="flex justify-between mt-4 border-t border-gray-800 pt-2">
-            <span>ACTIVE PIDs</span>
-            <span className="text-white">{agents.length}</span>
+                {/* Col 2: Agents */}
+                <div className="flex flex-col justify-center gap-1">
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-500">POOL</span>
+                        <span className="text-yellow-400 bg-yellow-900/10 px-1 rounded-sm text-[9px]">{MODEL_TIERS.FLASH.split('-')[2].toUpperCase()}</span>
+                    </div>
+                    <div className="w-full bg-gray-800 h-1 rounded overflow-hidden">
+                        <div className="bg-yellow-600 h-full transition-all duration-300" style={{ width: `${Math.min((agents.length / 12) * 100, 100)}%` }}></div>
+                    </div>
+                </div>
+                
+                {/* Full Width Stats - Simplified */}
+                <div className="col-span-2 flex justify-between items-center border-t border-gray-800/50 pt-1.5 mt-0.5">
+                    <div className="flex gap-2">
+                         <span>PID_COUNT: <span className="text-white font-bold">{agents.length}</span></span>
+                    </div>
+                    <div className="flex gap-1 items-center">
+                        <div className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`}></div>
+                        <span>{isRunning ? 'RUNNING' : 'STOPPED'}</span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Default / Desktop View
+    return (
+        <div className="space-y-3 text-xs font-mono text-gray-400">
+            <div className="flex justify-between items-center">
+                <span>ROOT_ARCHITECT</span>
+                <span className="text-blue-400 bg-blue-900/20 px-1 rounded">{MODEL_TIERS.PRO}</span>
+            </div>
+            <div className="w-full bg-gray-800 h-2 rounded overflow-hidden">
+                <div className="bg-blue-600 h-full transition-all duration-300" style={{ width: isRunning ? '65%' : '5%' }}></div>
+            </div>
+            
+            <div className="flex justify-between items-center mt-2">
+                <span>SUB_AGENTS_POOL</span>
+                <span className="text-yellow-400 bg-yellow-900/20 px-1 rounded">{MODEL_TIERS.FLASH}</span>
+            </div>
+                <div className="w-full bg-gray-800 h-2 rounded overflow-hidden">
+                <div className="bg-yellow-600 h-full transition-all duration-300" style={{ width: `${(agents.length / 12) * 100}%` }}></div>
+            </div>
+
+            <div className="flex justify-between mt-4 border-t border-gray-800 pt-3">
+                <span>ACTIVE PIDs</span>
+                <span className="text-white font-bold text-sm">{agents.length}</span>
+            </div>
         </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="h-screen w-screen flex flex-col bg-[#050505] text-[#e5e5e5] overflow-hidden font-sans">
       
       {/* RESPONSIVE HEADER */}
-      <header className="border-b border-gray-800 bg-[#0a0a0a] p-4 flex flex-col md:flex-row md:h-16 md:items-center justify-between gap-4 shrink-0 z-10">
+      <header className="border-b border-gray-800 bg-[#0a0a0a] p-4 flex flex-col md:flex-row md:h-16 md:items-center justify-between gap-4 shrink-0 z-10 shadow-md">
         <div className="flex justify-between items-center w-full md:w-auto">
             <div className="flex items-center gap-3">
-                <Activity className="text-green-500" />
-                <h1 className="font-bold tracking-widest text-lg">
+                <Activity className="text-green-500 w-6 h-6" />
+                <h1 className="font-bold tracking-widest text-lg md:text-xl">
                     AGENTIC<span className="text-gray-600">ORCHESTRATOR</span>
                 </h1>
             </div>
             {/* Mobile Status Indicator */}
-            <div className="md:hidden text-[10px] text-gray-500 font-mono">
+            <div className="md:hidden text-xs text-gray-500 font-mono border border-gray-800 px-2 py-1 rounded">
                 {isRunning ? (isProvisioning ? "PROV..." : "ACTIVE") : "IDLE"}
             </div>
         </div>
         
-        <div className="flex items-center gap-2 w-full md:flex-1 md:max-w-3xl md:mx-12">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:flex-1 md:max-w-3xl md:mx-12">
            <div className="relative flex-1 group">
              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                <span className="text-green-600 font-bold">{">"}</span>
+                <span className="text-green-600 font-bold text-lg">{">"}</span>
              </div>
              <input 
                 type="text" 
                 value={objective}
                 onChange={(e) => setObjective(e.target.value)}
                 disabled={isRunning}
-                className="w-full bg-black border border-gray-700 rounded-sm py-2 pl-8 pr-4 text-sm focus:outline-none focus:border-green-600 transition-colors disabled:opacity-50 font-mono"
+                className="w-full bg-black border border-gray-700 rounded-sm py-3 pl-8 pr-4 text-base focus:outline-none focus:border-green-600 transition-colors disabled:opacity-50 font-mono shadow-inner"
                 placeholder="DEFINE OBJECTIVE..."
              />
            </div>
@@ -274,16 +311,16 @@ const App: React.FC = () => {
            {!isRunning ? (
              <button 
                 onClick={handleBootstrap}
-                className="bg-green-700 hover:bg-green-600 text-white px-4 py-2 text-sm font-bold rounded-sm flex items-center gap-2 transition-colors uppercase whitespace-nowrap"
+                className="bg-green-700 hover:bg-green-600 text-white px-6 py-3 text-sm font-bold rounded-sm flex items-center justify-center gap-2 transition-colors uppercase whitespace-nowrap shadow-lg active:scale-95"
              >
-                <Play size={16} fill="currentColor" /> <span className="hidden sm:inline">Bootstrap</span>
+                <Play size={18} fill="currentColor" /> <span>Bootstrap</span>
              </button>
            ) : (
              <button 
                 onClick={handleStop}
-                className="bg-red-900/50 hover:bg-red-900 text-red-200 border border-red-800 px-4 py-2 text-sm font-bold rounded-sm flex items-center gap-2 transition-colors uppercase whitespace-nowrap"
+                className="bg-red-900/50 hover:bg-red-900 text-red-200 border border-red-800 px-6 py-3 text-sm font-bold rounded-sm flex items-center justify-center gap-2 transition-colors uppercase whitespace-nowrap shadow-lg active:scale-95"
              >
-                <Square size={16} fill="currentColor" /> <span className="hidden sm:inline">SigKill</span>
+                <Square size={18} fill="currentColor" /> <span>SigKill</span>
              </button>
            )}
         </div>
@@ -302,9 +339,9 @@ const App: React.FC = () => {
               <div className="flex-1 relative">
                  <NetworkGraph agents={agents} objective={objective} packets={packets} />
               </div>
-              <div className="h-1/3 border-t border-gray-800 p-4 bg-[#080808]">
-                 <h3 className="text-xs font-bold text-gray-400 mb-2 uppercase flex items-center gap-2">
-                    <Cpu size={12}/> Control Plane Resources
+              <div className="h-1/3 border-t border-gray-800 p-6 bg-[#080808]">
+                 <h3 className="text-sm font-bold text-gray-300 mb-4 uppercase flex items-center gap-2">
+                    <Cpu size={16}/> Control Plane Resources
                  </h3>
                  <ResourcePanel />
               </div>
@@ -347,14 +384,12 @@ const App: React.FC = () => {
             {/* TAB 1: VISUALS */}
             {mobileTab === 'VISUAL' && (
                 <div className="h-full flex flex-col">
-                    <div className="h-3/5 relative border-b border-gray-800">
+                    <div className="flex-1 relative border-b border-gray-800 min-h-0">
                         <NetworkGraph agents={agents} objective={objective} packets={packets} />
                     </div>
-                    <div className="flex-1 p-4 bg-[#080808] overflow-y-auto">
-                        <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase flex items-center gap-2">
-                             <Cpu size={12}/> Resources
-                        </h3>
-                        <ResourcePanel />
+                    <div className="shrink-0 p-3 bg-[#080808] border-t border-gray-800 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.5)] z-10">
+                        {/* Compact Resource Panel */}
+                         <ResourcePanel compact={true} />
                     </div>
                 </div>
             )}
@@ -364,8 +399,8 @@ const App: React.FC = () => {
                 <div className="h-full overflow-y-auto p-4">
                      {agents.length === 0 && !isProvisioning ? (
                          <div className="h-full flex flex-col items-center justify-center text-gray-800 gap-2">
-                            <Layers className="opacity-50" />
-                            <p className="font-mono text-xs">No active agents</p>
+                            <Layers className="opacity-50" size={32} />
+                            <p className="font-mono text-sm">No active agents</p>
                          </div>
                      ) : (
                          <div className="space-y-4 pb-4">
@@ -373,7 +408,7 @@ const App: React.FC = () => {
                                 <AgentCard key={agent.pid} agent={agent} />
                             ))}
                             {isProvisioning && (
-                                <div className="border border-gray-800 border-dashed p-4 rounded-sm text-center text-gray-600 animate-pulse text-xs font-mono">
+                                <div className="border border-gray-800 border-dashed p-6 rounded-sm text-center text-gray-500 animate-pulse text-sm font-mono">
                                     [PROVISIONING...]
                                 </div>
                             )}
@@ -391,29 +426,29 @@ const App: React.FC = () => {
         </div>
 
         {/* BOTTOM NAV BAR */}
-        <nav className="h-16 bg-[#0a0a0a] border-t border-gray-800 flex items-center justify-around shrink-0 pb-1">
+        <nav className="h-20 bg-[#0a0a0a] border-t border-gray-800 flex items-center justify-around shrink-0 pb-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)] z-20">
              <button 
                 onClick={() => setMobileTab('VISUAL')}
-                className={`flex flex-col items-center gap-1 p-2 ${mobileTab === 'VISUAL' ? 'text-green-500' : 'text-gray-600 hover:text-gray-400'}`}
+                className={`flex flex-col items-center gap-1.5 p-3 rounded-lg transition-colors ${mobileTab === 'VISUAL' ? 'text-green-500 bg-green-900/10' : 'text-gray-500 hover:text-gray-300'}`}
              >
-                <Network size={20} />
-                <span className="text-[10px] font-bold tracking-wider">NEURAL</span>
+                <Network size={24} />
+                <span className="text-xs font-bold tracking-wider">NEURAL</span>
              </button>
 
              <button 
                 onClick={() => setMobileTab('AGENTS')}
-                className={`flex flex-col items-center gap-1 p-2 ${mobileTab === 'AGENTS' ? 'text-green-500' : 'text-gray-600 hover:text-gray-400'}`}
+                className={`flex flex-col items-center gap-1.5 p-3 rounded-lg transition-colors ${mobileTab === 'AGENTS' ? 'text-green-500 bg-green-900/10' : 'text-gray-500 hover:text-gray-300'}`}
              >
-                <LayoutGrid size={20} />
-                <span className="text-[10px] font-bold tracking-wider">GRID</span>
+                <LayoutGrid size={24} />
+                <span className="text-xs font-bold tracking-wider">GRID</span>
              </button>
 
              <button 
                 onClick={() => setMobileTab('TERMINAL')}
-                className={`flex flex-col items-center gap-1 p-2 ${mobileTab === 'TERMINAL' ? 'text-green-500' : 'text-gray-600 hover:text-gray-400'}`}
+                className={`flex flex-col items-center gap-1.5 p-3 rounded-lg transition-colors ${mobileTab === 'TERMINAL' ? 'text-green-500 bg-green-900/10' : 'text-gray-500 hover:text-gray-300'}`}
              >
-                <Terminal size={20} />
-                <span className="text-[10px] font-bold tracking-wider">TERM</span>
+                <Terminal size={24} />
+                <span className="text-xs font-bold tracking-wider">TERM</span>
              </button>
         </nav>
       </div>

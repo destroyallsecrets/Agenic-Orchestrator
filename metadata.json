@@ -1,0 +1,5 @@
+{
+  "name": "Agentic Orchestrator",
+  "description": "A visual simulation of a recursive agentic architecture featuring a Root Architect control plane, binary data plane visualization, and dynamic sub-agent lifecycle management.",
+  "requestFramePermissions": []
+}

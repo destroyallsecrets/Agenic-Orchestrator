@@ -14,12 +14,16 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ agents, objective, packets 
   const svgRef = useRef<SVGSVGElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
-  // Use a ref for packets to access the latest data in the animation loop 
-  // without re-triggering the useEffect hook and resetting the canvas state.
+  // Use refs for dynamic data access within the animation loop
   const packetsRef = useRef(packets);
   useEffect(() => {
     packetsRef.current = packets;
   }, [packets]);
+
+  const agentsRef = useRef(agents);
+  useEffect(() => {
+    agentsRef.current = agents;
+  }, [agents]);
 
   // --- MODE A: MATRIX RAIN (RAW) ---
   useEffect(() => {
@@ -37,7 +41,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ agents, objective, packets 
     const columns = Math.ceil(canvas.width / fontSize);
     const drops: number[] = new Array(columns).fill(1);
     
-    // Initialize drops with random starting positions to avoid "wall of text" effect on load
+    // Initialize drops
     for (let i = 0; i < columns; i++) {
         drops[i] = Math.floor(Math.random() * -100);
     }
@@ -50,49 +54,50 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ agents, objective, packets 
       ctx.fillStyle = '#0F0'; // Matrix Green
       ctx.font = `${fontSize}px monospace`;
       
-      // Construct binary pool from latest packets to reflect real-time activity
-      const currentPackets = packetsRef.current;
-      const isIdle = currentPackets.length === 0;
+      // Determine System State
+      const currentAgents = agentsRef.current;
+      const isSystemActive = currentAgents.some(a => a.status === OpCode.INITIALIZE || a.status === OpCode.EXECUTING);
+      
       let binaryPool = "";
       
-      if (!isIdle) {
-          // Take the last 10 packets to generate the stream data
-          const slice = currentPackets.slice(-10).reverse();
-          slice.forEach(p => {
-             // Convert metadata to binary
-             const idBin = p.agentId.toString(2);
-             const opBin = p.opCode.toString(2);
-             // Simple payload hashing to binary
-             let payloadBin = "";
-             for(let c = 0; c < Math.min(p.payload.length, 5); c++) {
-                 payloadBin += p.payload.charCodeAt(c).toString(2);
-             }
-             binaryPool += idBin + opBin + payloadBin;
-          });
+      if (isSystemActive) {
+          // ACTIVE STATE: Construct binary pool ONLY from real-time packets
+          const currentPackets = packetsRef.current;
+          if (currentPackets.length > 0) {
+              const slice = currentPackets.slice(-15).reverse();
+              slice.forEach(p => {
+                 const idBin = p.agentId.toString(2);
+                 const opBin = p.opCode.toString(2);
+                 let payloadBin = "";
+                 for(let c = 0; c < Math.min(p.payload.length, 5); c++) {
+                     payloadBin += p.payload.charCodeAt(c).toString(2);
+                 }
+                 binaryPool += idBin + opBin + payloadBin;
+              });
+          }
       } else {
-          // Idle state binary - minimized to reduce visual noise
+          // IDLE STATE: "Start it back" - Minimal idle stream
           binaryPool = "0"; 
       }
 
+      // Fallback to prevent crash if pool is empty
+      if (binaryPool.length === 0) binaryPool = "10";
+
       for (let i = 0; i < drops.length; i++) {
-        // Deterministically pick a bit from the pool based on column and current drop height
-        // This ensures the "rain" looks like the data flowing down
         const charIndex = (i * 13 + Math.abs(Math.floor(drops[i]))) % binaryPool.length;
-        const text = binaryPool[charIndex] === '0' ? '0' : '1';
+        const text = binaryPool[charIndex];
         
-        // Randomly highlight some chars brighter
-        // If system is idle (packets empty), reduce brightness frequency significantly
-        const highlightChance = isIdle ? 0.9995 : 0.95;
+        // Visual Tuning based on State
+        // Active: More frequent highlights, Standard density
+        // Idle: Rare highlights, Very low density (reduced frequency)
+        const highlightChance = isSystemActive ? 0.95 : 0.9995;
+        const respawnThreshold = isSystemActive ? 0.975 : 0.9995;
+
         ctx.fillStyle = Math.random() > highlightChance ? '#CFFFDC' : '#00FF41';
         
-        // Only draw if drop is on screen
         if (drops[i] * fontSize > 0) {
             ctx.fillText(text, i * fontSize, drops[i] * fontSize);
         }
-
-        // Reset drop to top randomly
-        // Significantly reduce rain density when idle (0.05% respawn vs 2.5%)
-        const respawnThreshold = isIdle ? 0.9995 : 0.975;
 
         if (drops[i] * fontSize > canvas.height && Math.random() > respawnThreshold) {
           drops[i] = 0;
@@ -105,7 +110,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ agents, objective, packets 
     const interval = setInterval(draw, 33);
     return () => clearInterval(interval);
 
-  }, [mode]); // Only re-init when switching modes, not when packets change
+  }, [mode]); 
 
   // --- MODE B: D3 TOPOLOGY (TOPO) ---
   useEffect(() => {
@@ -114,7 +119,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ agents, objective, packets 
     const width = svgRef.current.parentElement?.clientWidth || 300;
     const height = svgRef.current.parentElement?.clientHeight || 300;
 
-    // Clear previous
     d3.select(svgRef.current).selectAll("*").remove();
 
     const svg = d3.select(svgRef.current)
@@ -122,11 +126,10 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ agents, objective, packets 
       .style("max-width", "100%")
       .style("height", "auto");
 
-    // Define Arrowhead Marker
     svg.append("defs").append("marker")
         .attr("id", "arrow")
         .attr("viewBox", "0 -5 10 10")
-        .attr("refX", 18) // Adjusted for node radius (6 + padding)
+        .attr("refX", 18) 
         .attr("refY", 0)
         .attr("markerWidth", 6)
         .attr("markerHeight", 6)
@@ -135,7 +138,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ agents, objective, packets 
         .attr("d", "M0,-5L10,0L0,5")
         .attr("fill", "#333");
 
-    // Nodes: Root + Agents
     const nodes = [
       { id: 'ROOT', group: 0, status: OpCode.EXECUTING, role: 'ARCHITECT' },
       ...agents.map(a => ({ 
@@ -147,7 +149,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ agents, objective, packets 
       }))
     ];
 
-    // Links: Parent -> Child
     const links = agents.map(a => ({ 
       source: a.parentId ? a.parentId.toString() : 'ROOT', 
       target: a.pid.toString() 
@@ -166,14 +167,13 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ agents, objective, packets 
       .data(links)
       .join("line")
       .attr("stroke-width", 1.5)
-      .attr("marker-end", "url(#arrow)"); // Attach marker
+      .attr("marker-end", "url(#arrow)");
 
     const node = svg.append("g")
       .selectAll("g")
       .data(nodes)
       .join("g");
 
-    // Node Circles
     node.append("circle")
       .attr("r", (d) => d.group === 0 ? 10 : 6)
       .attr("fill", (d) => {
@@ -185,7 +185,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({ agents, objective, packets 
       .attr("stroke", "#000")
       .attr("stroke-width", 1.5);
 
-    // Labels
     node.append("text")
       .text(d => d.group === 0 ? "ROOT" : `${d.id}`)
       .attr("x", 12)

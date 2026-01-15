@@ -20,6 +20,7 @@ export interface Agent {
   tier: 'FLASH' | 'PRO';
   logs: string[];
   parentId: number | null;
+  progress: number;
 }
 
 export interface SystemState {

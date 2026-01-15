@@ -8,10 +8,14 @@ export const decomposeObjective = async (objective: string): Promise<Array<{ rol
   try {
     const response = await ai.models.generateContent({
       model: MODEL_TIERS.PRO, // Using Pro for complex reasoning/architecture
-      contents: `Analyze the following high-level technical objective and decompose it into 3-5 specialized sub-agent roles required to execute it. 
+      contents: `Act as the Root Architect. Analyze the following high-level technical objective and decompose it into 3-5 specialized sub-agent roles required to execute it. 
       Objective: "${objective}"
       
-      Determine if the role requires high-speed I/O (FLASH) or complex reasoning (PRO).`,
+      Requirements:
+      1. Assign 'FLASH' tier to roles requiring high-speed I/O (e.g., DevOps, Scanning).
+      2. Assign 'PRO' tier to roles requiring complex reasoning (e.g., Security Audit, Architecture).
+      
+      Return JSON only.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -50,11 +54,10 @@ export const proposeSubAgent = async (parentRole: string, currentContext: string
   try {
     const response = await ai.models.generateContent({
       model: MODEL_TIERS.FLASH,
-      contents: `You are a recursive agent architect. 
-      Parent Agent Role: "${parentRole}"
+      contents: `You are the Root Architect. A parent agent "${parentRole}" is requesting additional resources.
       Current Context: "${currentContext}"
       
-      The parent agent is overloaded. Define a SINGLE specific sub-agent role to delegate a specific task to.
+      Define a SINGLE specific sub-agent role to delegate a specific task to.
       Return JSON.`,
       config: {
         responseMimeType: "application/json",

@@ -44,6 +44,13 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent }) => {
         {agent.role}
       </div>
 
+      <div className="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
+        <div 
+            className={`h-full ${agent.status === OpCode.TERMINAL ? 'bg-gray-500' : 'bg-green-500'} transition-all duration-500`} 
+            style={{ width: `${agent.progress}%` }}
+        />
+      </div>
+
       <div className="flex-1 bg-black/40 p-2 rounded overflow-hidden flex flex-col justify-end min-h-[60px]">
         <div className="space-y-1">
             {agent.logs.slice(-3).map((log, i) => (
@@ -56,7 +63,7 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent }) => {
 
       <div className="text-[10px] flex justify-between items-center pt-1 opacity-60">
         <span>MEM: {Math.floor(Math.random() * 128 + 64)}MB</span>
-        <span>CPU: {Math.floor(Math.random() * 80 + 10)}%</span>
+        <span>CPU: {agent.status === OpCode.TERMINAL ? 0 : Math.floor(Math.random() * 80 + 10)}%</span>
       </div>
     </div>
   );
